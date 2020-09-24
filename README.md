@@ -53,5 +53,4 @@ Just make sure it is a .txt!
 --------------------
 
 This work was inspired by previous work on blue noise. Especially to mention:
-* https://eheitzresearch.wordpress.com/772-2/
-* https://dl.acm.org/doi/10.1145/2897839.2927430
+* [karpathy](https://github.com/karpathy/char-rnn)
