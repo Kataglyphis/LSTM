@@ -40,12 +40,12 @@ std = 0.1
 option = sys.argv[1]
 
 # hyperparameters
-emb_size = 16
-hidden_size = 64 #256  # size of hidden layer of neurons
-seq_length = 1#128  # number of steps to unroll the RNN for
+emb_size = 16 #16
+hidden_size = 256 #256  # size of hidden layer of neurons
+seq_length = 256#128  # number of steps to unroll the RNN for
 learning_rate = 5e-2
 max_updates = 10000#500000
-batch_size = 32
+batch_size = 512#32
 
 concat_size = emb_size + hidden_size
 
@@ -93,12 +93,15 @@ def forward(inputs, targets, memory):
 
     # forward pass
     for t in range(input_length):
-        xs[t] = cp.zeros((vocab_size, batch_size))  # encode in 1-of-k representation
+        #xs = cp.asnumpy(xs)
+        inputs = cp.asnumpy(inputs)
+        xs[t] = np.zeros((vocab_size, batch_size))  # encode in 1-of-k representation
         for b in range(batch_size):
             xs[t][inputs[t][b]][b] = 1
-
+        xs[t] = cp.asarray(xs[t])
+        inputs = cp.asarray(inputs)
         # convert word indices to word embeddings
-        wes[t] = cp.dot(Wex, xs[t])
+        wes[t] = Wex @ xs[t]
 
         # LSTM cell operation
         # first concatenate the input and h to get z
@@ -131,11 +134,13 @@ def forward(inputs, targets, memory):
         ys[t] = Why @ hs[t] + by
         ps[t] = softmax(ys[t])
         # label
-        ls[t] = cp.zeros((vocab_size, batch_size))
+        ls[t] = np.zeros((vocab_size, batch_size))
+        targets = cp.asnumpy(targets)
         #  ls[t] = np.asarray(ls[t])
         for b in range(batch_size):
             ls[t][targets[t][b]][b] = 1
-
+        targets = cp.asarray(targets)
+        ls[t] = cp.asarray(ls[t])
         # cross-entropy loss
         loss_t = cp.sum(-cp.log(ps[t]) * ls[t])
         loss += loss_t
