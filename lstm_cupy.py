@@ -29,7 +29,8 @@ def softmax(x):
 
 
 # data I/O
-data = open('data/input.txt', 'r').read()  # should be simple plain text file
+#data = open('data/input.txt', 'r').read()  # should be simple plain text file
+data = open('data/THE_CRITIQUE_OF_PRACTICAL_REASON.txt', 'r').read()  # should be simple plain text file
 chars = sorted(list(set(data)))
 data_size, vocab_size = len(data), len(chars)
 print('data has %d characters, %d unique.' % (data_size, vocab_size))
@@ -42,9 +43,9 @@ option = sys.argv[1]
 # hyperparameters
 emb_size = 16 #16
 hidden_size = 256 #256  # size of hidden layer of neurons
-seq_length = 256#128  # number of steps to unroll the RNN for
-learning_rate = 5e-2
-max_updates = 10000#500000
+seq_length = 128#128  # number of steps to unroll the RNN for
+learning_rate = 5e-2 #5e-2
+max_updates = 500000#500000
 batch_size = 512#32
 
 concat_size = emb_size + hidden_size
@@ -173,17 +174,21 @@ def backward(activations, clipping=True, scale=True):
     # back propagation through time starts here
     for t in reversed(range(input_length)):
         # computing the gradients here
+        # first, we need to compute the gradients of the variable closest to the loss function,
+        # which is the softmax output p
+        # but here I skip it directly to the gradients of the unnormalized scores o because
+        # basically dL / do = p - y
         dy = ps[t] - ls[t]
 
         #if scale:
            # dy = dy / bsz
 
         # the gradients w.r.t to the weights and the bias that were used to create o[t]
-        dWhy = cp.dot(dy, hs[t].T)
-        dby = cp.sum(dy, axis=-1, keepdims=True)
+        dWhy += dy @ hs[t].T
+        dby += cp.sum(dy, axis=-1, keepdims=True)
 
         # because h is connected to both o and the next h, we sum the gradients up
-        dh = cp.dot(Why.T, dy) + dhnext
+        dh = Why.T @ dy + dhnext
 
         #gradient for os[t] in hs[t] = os[t] * tanh(cs[t])
         dho = cp.tanh(cs[t]) * dh 
@@ -205,24 +210,24 @@ def backward(activations, clipping=True, scale=True):
         dhc = ins[t] * dc
         dhc = dtanh(c_s[t]) * dhc
 
-        dWf = cp.dot(dhf, zs[t].T)
-        dbf = cp.sum(dhf, axis=-1, keepdims=True)
-        dxf = cp.dot(Wf.T, dhf)
+        dWf += dhf @ zs[t].T
+        dbf += cp.sum(dhf, axis=-1, keepdims=True)
+        dxf = Wf.T @ dhf
 
-        dWi = cp.dot(dhi, zs[t].T)
-        dbi = cp.sum(dhi, axis=-1, keepdims=True)
-        dxi = cp.dot(Wi.T, dhi)
+        dWi += dhi @ zs[t].T
+        dbi += cp.sum(dhi, axis=-1, keepdims=True)
+        dxi = Wi.T @ dhi
 
-        dWo = cp.dot(dho, zs[t].T)
-        dbo = cp.sum(dho, axis=-1, keepdims=True)
-        dxo = cp.dot(Wo.T, dho)
+        dWo += dho @ zs[t].T
+        dbo += cp.sum(dho, axis=-1, keepdims=True)
+        dxo = Wo.T @ dho
 
-        dWc = cp.dot(dhc, zs[t].T)
-        dbc = cp.sum(dhc, axis=-1, keepdims=True)
-        dxc = cp.dot(Wc.T, dhc)
+        dWc += dhc @ zs[t].T
+        dbc += cp.sum(dhc, axis=-1, keepdims=True)
+        dxc = Wc.T @ dhc
 
         dx = dxo + dxc + dxi + dxf
-        dWex = cp.dot(dx[hidden_size:,:], xs[t].T)
+        dWex += dx[hidden_size:,:] @ xs[t].T
 
         dhnext = dx[:hidden_size,:]#hs[t-1]
         dcnext = fs[t] * dc
