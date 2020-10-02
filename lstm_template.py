@@ -4,13 +4,12 @@ Code structure borrowed from the Vanilla RNN model from Andreij Karparthy @karpa
 BSD License
 """
 import numpy as np
-import cupy as cp
 from random import uniform
 import sys
 
 
 def sigmoid(x):
-    return 1 / (1 + cp.exp(-x))
+    return 1 / (1 + np.exp(-x))
 
 
 def dsigmoid(y):
@@ -24,13 +23,12 @@ def dtanh(x):
 # The numerically stable softmax implementation
 def softmax(x):
     # assuming x shape is [feature_size, batch_size]
-    e_x = cp.exp(x - cp.max(x, axis=0))
+    e_x = np.exp(x - np.max(x, axis=0))
     return e_x / e_x.sum(axis=0)
 
 
 # data I/O
-#data = open('data/input.txt', 'r').read()  # should be simple plain text file
-data = open('data/THE_CRITIQUE_OF_PRACTICAL_REASON.txt', 'r').read()  # should be simple plain text file
+data = open('data/input.txt', 'r').read()  # should be simple plain text file
 chars = sorted(list(set(data)))
 data_size, vocab_size = len(data), len(chars)
 print('data has %d characters, %d unique.' % (data_size, vocab_size))
@@ -41,40 +39,40 @@ std = 0.1
 option = sys.argv[1]
 
 # hyperparameters
-emb_size = 16 #16
-hidden_size = 256 #256  # size of hidden layer of neurons
-seq_length = 128#128  # number of steps to unroll the RNN for
-learning_rate = 5e-2 #5e-2
-max_updates = 500000#500000
-batch_size = 32#32
+emb_size = 16
+hidden_size = 256  # size of hidden layer of neurons
+seq_length = 128  # number of steps to unroll the RNN for
+learning_rate = 5e-2
+max_updates = 500000
+batch_size = 32
 
 concat_size = emb_size + hidden_size
 
 # model parameters
 # char embedding parameters
-Wex = cp.random.randn(emb_size, vocab_size) * std  # embedding layer
+Wex = np.random.randn(emb_size, vocab_size) * std  # embedding layer
 
 # LSTM parameters
-Wf = cp.random.randn(hidden_size, concat_size) * std  # forget gate
-Wi = cp.random.randn(hidden_size, concat_size) * std  # input gate
-Wo = cp.random.randn(hidden_size, concat_size) * std  # output gate
-Wc = cp.random.randn(hidden_size, concat_size) * std  # c term
+Wf = np.random.randn(hidden_size, concat_size) * std  # forget gate
+Wi = np.random.randn(hidden_size, concat_size) * std  # input gate
+Wo = np.random.randn(hidden_size, concat_size) * std  # output gate
+Wc = np.random.randn(hidden_size, concat_size) * std  # c term
 
-bf = cp.zeros((hidden_size, 1))  # forget bias
-bi = cp.zeros((hidden_size, 1))  # input bias
-bo = cp.zeros((hidden_size, 1))  # output bias
-bc = cp.zeros((hidden_size, 1))  # memory bias
+bf = np.zeros((hidden_size, 1))  # forget bias
+bi = np.zeros((hidden_size, 1))  # input bias
+bo = np.zeros((hidden_size, 1))  # output bias
+bc = np.zeros((hidden_size, 1))  # memory bias
 
 # Output layer parameters
-Why = cp.random.randn(vocab_size, hidden_size) * std  # hidden to output
-by = cp.random.randn(vocab_size, 1) * std  # output bias
+Why = np.random.randn(vocab_size, hidden_size) * std  # hidden to output
+by = np.random.randn(vocab_size, 1) * std  # output bias
 
-data_stream = cp.asarray([char_to_ix[char] for char in data])
+data_stream = np.asarray([char_to_ix[char] for char in data])
 print(data_stream.shape)
 
 bound = (data_stream.shape[0] // (seq_length * batch_size)) * (seq_length * batch_size)
 cut_stream = data_stream[:bound]
-cut_stream = cp.reshape(cut_stream, (batch_size, -1))
+cut_stream = np.reshape(cut_stream, (batch_size, -1))
 
 
 def forward(inputs, targets, memory):
@@ -86,157 +84,85 @@ def forward(inputs, targets, memory):
     hprev, cprev = memory
     xs, wes, hs, ys, ps, cs, zs, ins, c_s, ls = {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
     os, fs = {}, {}
-    hs[-1] = cp.copy(hprev)
-    cs[-1] = cp.copy(cprev)
+    hs[-1] = np.copy(hprev)
+    cs[-1] = np.copy(cprev)
 
     loss = 0
     input_length = inputs.shape[0]
 
     # forward pass
     for t in range(input_length):
-        #xs = cp.asnumpy(xs)
-        inputs = cp.asnumpy(inputs)
         xs[t] = np.zeros((vocab_size, batch_size))  # encode in 1-of-k representation
         for b in range(batch_size):
             xs[t][inputs[t][b]][b] = 1
-        xs[t] = cp.asarray(xs[t])
-        inputs = cp.asarray(inputs)
+
         # convert word indices to word embeddings
-        wes[t] = Wex @ xs[t]
+        wes[t] = np.dot(Wex, xs[t])
 
         # LSTM cell operation
         # first concatenate the input and h to get z
-        zs[t] = cp.vstack((hs[t - 1], wes[t]))
-
+        zs[t] = np.row_stack((hs[t - 1], wes[t]))
 
         # compute the forget gate
         # f = sigmoid(Wf * z + bf)
-        fs[t] = sigmoid(Wf @ zs[t] + bf)
+
         # compute the input gate
         # i = sigmoid(Wi * z + bi)
-        ins[t] = sigmoid(Wi @ zs[t] + bi)
         # compute the candidate memory
         # c_ = tanh(Wc * z + bc)
-        c_s[t] = cp.tanh(Wc @ zs[t] + bc)
 
         # new memory: applying forget gate on the previous memory
         # and then adding the input gate on the candidate memory
         # c_t = f * c_(t-1) + i * c_
-        cs[t] = cp.multiply(fs[t],cs[t-1]) + cp.multiply(ins[t],c_s[t])
 
         # output gate
         #o = sigmoid(Wo * z + bo)
-        os[t] = sigmoid(Wo @ zs[t] + bo)
-        hs[t] = cp.multiply(os[t],cp.tanh(cs[t]))
+
         # DONE LSTM
         # output layer - softmax and cross-entropy loss
         # unnormalized log probabilities for next chars
         # softmax for probabilities for next chars
-        ys[t] = Why @ hs[t] + by
-        ps[t] = softmax(ys[t])
+
+
         # label
         ls[t] = np.zeros((vocab_size, batch_size))
-        targets = cp.asnumpy(targets)
-        #  ls[t] = np.asarray(ls[t])
         for b in range(batch_size):
             ls[t][targets[t][b]][b] = 1
-        targets = cp.asarray(targets)
-        ls[t] = cp.asarray(ls[t])
+
         # cross-entropy loss
-        loss_t = cp.sum(-cp.log(ps[t]) * ls[t])
+        loss_t = np.sum(-np.log(ps[t]) * ls[t])
         loss += loss_t
         # loss += -np.log(ps[t][targets[t],0])
 
     # activations = ()
-    activations = (xs, wes, hs, ys, ps, cs, zs, ins, c_s, ls, os, fs)
-    memory = (hs[input_length - 1], cs[input_length -1])#(hs[-1], cs[-1])
+    memory = (hs[inputs.shape[-1] - 1], cs[inputs.shape[-1] -1])
 
     return loss, activations, memory
 
 
-def backward(activations, clipping=True, scale=True):
+def backward(activations, clipping=True):
     xs, wes, hs, ys, ps, cs, zs, ins, c_s, ls, os, fs = activations
 
     # backward pass: compute gradients going backwards
     # Here we allocate memory for the gradients
-    dWex, dWhy = cp.zeros_like(Wex), cp.zeros_like(Why)
-    dby = cp.zeros_like(by)
-    dWf, dWi, dWc, dWo = cp.zeros_like(Wf), cp.zeros_like(Wi), cp.zeros_like(Wc), cp.zeros_like(Wo)
-    dbf, dbi, dbc, dbo = cp.zeros_like(bf), cp.zeros_like(bi), cp.zeros_like(bc), cp.zeros_like(bo)
+    dWex, dWhy = np.zeros_like(Wex), np.zeros_like(Why)
+    dby = np.zeros_like(by)
+    dWf, dWi, dWc, dWo = np.zeros_like(Wf), np.zeros_like(Wi), np.zeros_like(Wc), np.zeros_like(Wo)
+    dbf, dbi, dbc, dbo = np.zeros_like(bf), np.zeros_like(bi), np.zeros_like(bc), np.zeros_like(bo)
 
-    dhnext = cp.zeros_like(hs[0])
-    dcnext = cp.zeros_like(cs[0])
-
-    bsz = dhnext.shape[-1]
+    dhnext = np.zeros_like(hs[0])
+    dcnext = np.zeros_like(cs[0])
 
     input_length = len(xs)
 
     # back propagation through time starts here
     for t in reversed(range(input_length)):
         # computing the gradients here
-        # first, we need to compute the gradients of the variable closest to the loss function,
-        # which is the softmax output p
-        # but here I skip it directly to the gradients of the unnormalized scores o because
-        # basically dL / do = p - y
-        dy = ps[t] - ls[t]
-
-        #if scale:
-           # dy = dy / bsz
-
-        # the gradients w.r.t to the weights and the bias that were used to create o[t]
-        dWhy += dy @ hs[t].T
-        dby += cp.sum(dy, axis=-1, keepdims=True)
-
-        # because h is connected to both o and the next h, we sum the gradients up
-        dh = Why.T @ dy + dhnext
-
-        #gradient for os[t] in hs[t] = os[t] * tanh(cs[t])
-        dho = cp.tanh(cs[t]) * dh
-        dho = dsigmoid(os[t]) * dho
-
-        #gradient for cs in hs[t] = os[t] * tanh(cs[t])
-        dc = dtanh(cp.tanh(cs[t])) * os[t] * dh#os[t]*(1 - cs[t] * cs[t]) * dh
-        dc = dc + dcnext
-
-        #gradient for f in c_t = f * c_(t-1) + i * c_
-        dhf = cs[t-1] * dc
-        dhf = dsigmoid(fs[t]) * dhf
-
-        #gradient for i in c_t = f * c_(t-1) + i * c_
-        dhi = c_s[t] * dc
-        dhi = dsigmoid(ins[t]) * dhi
-
-        #gradient for c_ in c_t = f * c_(t-1) + i * c_
-        dhc = ins[t] * dc
-        dhc = dtanh(c_s[t]) * dhc
-
-        dWf += dhf @ zs[t].T
-        dbf += cp.sum(dhf, axis=-1, keepdims=True)
-        dxf = Wf.T @ dhf
-
-        dWi += dhi @ zs[t].T
-        dbi += cp.sum(dhi, axis=-1, keepdims=True)
-        dxi = Wi.T @ dhi
-
-        dWo += dho @ zs[t].T
-        dbo += cp.sum(dho, axis=-1, keepdims=True)
-        dxo = Wo.T @ dho
-
-        dWc += dhc @ zs[t].T
-        dbc += cp.sum(dhc, axis=-1, keepdims=True)
-        dxc = Wc.T @ dhc
-
-        dx = dxo + dxc + dxi + dxf
-        dWex += dx[hidden_size:,:] @ xs[t].T
-
-        dhnext = dx[:hidden_size,:]#hs[t-1]
-        dcnext = fs[t] * dc
-
 
     # clip to mitigate exploding gradients
     if clipping:
         for dparam in [dWex, dWf, dWi, dWo, dWc, dbf, dbi, dbo, dbc, dWhy, dby]:
-            cp.clip(dparam, -5, 5, out=dparam)
+            np.clip(dparam, -5, 5, out=dparam)
 
     gradients = (dWex, dWf, dWi, dWo, dWc, dbf, dbi, dbo, dbc, dWhy, dby)
 
@@ -249,37 +175,18 @@ def sample(memory, seed_ix, n):
   h is memory state, seed_ix is seed letter for first time step
   """
     h, c = memory
-    x = cp.zeros((vocab_size, 1))
-    #seed_ix = cp.asnumpy(seed_ix)
+    x = np.zeros((vocab_size, 1))
     x[seed_ix] = 1
     ixes = []
     for t in range(n):
-        
-        wes = Wex @ x
 
-        z = cp.vstack((h, wes))
-
-        f = sigmoid(Wf @ z + bf)
-
-        ins = sigmoid(Wi @ z + bi)
-
-        c_ = cp.tanh(Wc @ z + bc)
-
-        cs = cp.multiply(f,c) + cp.multiply(ins,c_)
-
-        o = sigmoid(Wo @ z + bo)
-        h = cp.multiply(o,cp.tanh(cs))
-
-        y = Why @ h + by
-        p = softmax(y)
         # forward pass again, but we do not have to store the activations now
-        #loss, activations, memory = forward(inputs, targets, (hprev, nprev))
-        p = cp.exp(y) / cp.sum(cp.exp(y))
-        #p = cp.asnumpy(p)
-        ix = cp.random.choice(a=range(vocab_size),size=1, p=p.ravel()).item()
+
+        p = np.exp(y) / np.sum(np.exp(y))
+        ix = np.random.choice(range(vocab_size), p=p.ravel())
 
         index = ix
-        x = cp.zeros((vocab_size, 1))
+        x = np.zeros((vocab_size, 1))
         x[index] = 1
         ixes.append(index)
     return ixes
@@ -291,21 +198,21 @@ if option == 'train':
     n_updates = 0
 
     # momentum variables for Adagrad
-    mWex, mWhy = cp.zeros_like(Wex), cp.zeros_like(Why)
-    mby = cp.zeros_like(by)
+    mWex, mWhy = np.zeros_like(Wex), np.zeros_like(Why)
+    mby = np.zeros_like(by)
 
-    mWf, mWi, mWo, mWc = cp.zeros_like(Wf), cp.zeros_like(Wi), cp.zeros_like(Wo), cp.zeros_like(Wc)
-    mbf, mbi, mbo, mbc = cp.zeros_like(bf), cp.zeros_like(bi), cp.zeros_like(bo), cp.zeros_like(bc)
+    mWf, mWi, mWo, mWc = np.zeros_like(Wf), np.zeros_like(Wi), np.zeros_like(Wo), np.zeros_like(Wc)
+    mbf, mbi, mbo, mbc = np.zeros_like(bf), np.zeros_like(bi), np.zeros_like(bo), np.zeros_like(bc)
 
-    smooth_loss = -cp.log(1.0 / vocab_size) * seq_length  # loss at iteration 0
+    smooth_loss = -np.log(1.0 / vocab_size) * seq_length  # loss at iteration 0
 
     data_length = cut_stream.shape[1]
 
     while True:
         # prepare inputs (we're sweeping from left to right in steps seq_length long)
         if p + seq_length + 1 >= data_length or n == 0:
-            hprev = cp.zeros((hidden_size, batch_size))  # reset RNN memory
-            cprev = cp.zeros((hidden_size, batch_size))
+            hprev = np.zeros((hidden_size, batch_size))  # reset RNN memory
+            cprev = np.zeros((hidden_size, batch_size))
             p = 0  # go from start of data
 
         inputs = cut_stream[:, p:p + seq_length].T
@@ -313,8 +220,8 @@ if option == 'train':
 
         # sample from the model now and then
         if n % 200 == 0:
-            h_zero = cp.zeros((hidden_size, 1))  # reset RNN memory
-            c_zero = cp.zeros((hidden_size, 1))
+            h_zero = np.zeros((hidden_size, 1))  # reset RNN memory
+            c_zero = np.zeros((hidden_size, 1))
             sample_ix = sample((h_zero, c_zero), inputs[0][0], 2000)
             txt = ''.join(ix_to_char[ix] for ix in sample_ix)
             print('----\n %s \n----' % (txt,))
@@ -334,7 +241,7 @@ if option == 'train':
                                       [dWf, dWi, dWo, dWc, dbf, dbi, dbo, dbc, dWex, dWhy, dby],
                                       [mWf, mWi, mWo, mWc, mbf, mbi, mbo, mbc, mWex, mWhy, mby]):
             mem += dparam * dparam
-            param += -learning_rate * dparam / cp.sqrt(mem + 1e-8)  # adagrad update
+            param += -learning_rate * dparam / np.sqrt(mem + 1e-8)  # adagrad update
 
         p += seq_length  # move data pointer
         n += 1  # iteration counter
@@ -354,8 +261,8 @@ elif option == 'gradcheck':
 
     delta = 0.0001
 
-    hprev = cp.zeros((hidden_size, batch_size))
-    cprev = cp.zeros((hidden_size, batch_size))
+    hprev = np.zeros((hidden_size, batch_size))
+    cprev = np.zeros((hidden_size, batch_size))
 
     memory = (hprev, cprev)
 
@@ -380,19 +287,14 @@ elif option == 'gradcheck':
         for i in range(weight.size):
 
             # evaluate cost at [x + delta] and [x - delta]
-            #weight = cp.asnumpy(weight)
-            #wight_copy = weight
-            w = weight.flatten().take(indices=i).item()
-            weight.put(indices=i,values = w + delta)
+            w = weight.flat[i]
+            weight.flat[i] = w + delta
             loss_positive, _, _ = forward(inputs, targets, memory)
-            weight.put(indices=i,values = w - delta)
+            weight.flat[i] = w - delta
             loss_negative, _, _ = forward(inputs, targets, memory)
-            weight.put(indices=i,values = w)  # reset old value for this parameter
-            #weight = cp.asarray(weight)
+            weight.flat[i] = w  # reset old value for this parameter
             # fetch both numerical and analytic gradient
-            #grad = cp.asnumpy(grad)
-            grad_analytic = grad.flatten().take(indices=i).item()#grad.flat[i]
-            #grad = cp.asarray(grad)
+            grad_analytic = grad.flat[i]
             grad_numerical = (loss_positive - loss_negative) / (2 * delta)
             gradnumsum += grad_numerical
             gradanasum += grad_analytic
@@ -405,7 +307,7 @@ elif option == 'gradcheck':
                 print ('WARNING %f, %f => %e ' % (grad_numerical, grad_analytic, rel_error))
                 countidx += 1
                 erroridx.append(i)
-
+                
         print('For %s found %i bad gradients; with %i total parameters in the vector/matrix!' % (
             name, countidx, weight.size))
         print(' Average numerical grad: %0.9f \n Average analytical grad: %0.9f \n Average relative grad: %0.9f' % (
