@@ -13,6 +13,8 @@
 --------
 
 - Python >= v3.8
+- Cupy
+- Cuda
 
 --------------------------
 ## Purpose of this project
