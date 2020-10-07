@@ -167,4 +167,5 @@ notions obtaterdensabling on the above habd a deriv"
 --------------------
 
 This work was inspired by previous work on char-rnn. Especially to mention:
-* [karpathy](https://github.com/karpathy/char-rnn)
+* [karpathy](https://github.com/karpathy/char-rnn) <br>
+* [quanpn90](https://github.com/quanpn90/LSTMAssignment-DLNN2020)
