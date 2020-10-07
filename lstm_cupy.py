@@ -42,8 +42,8 @@ option = sys.argv[1]
 
 # hyperparameters
 emb_size = 16 #16
-hidden_size = 256 #256  # size of hidden layer of neurons
-seq_length = 128#128  # number of steps to unroll the RNN for
+hidden_size = 32 #256  # size of hidden layer of neurons
+seq_length = 1#128  # number of steps to unroll the RNN for
 learning_rate = 5e-2 #5e-2
 max_updates = 500000#500000
 batch_size = 32#32
@@ -195,7 +195,7 @@ def backward(activations, clipping=True, scale=True):
         dho = dsigmoid(os[t]) * dho
 
         #gradient for cs in hs[t] = os[t] * tanh(cs[t])
-        dc = dtanh(cp.tanh(cs[t])) * os[t] * dh#os[t]*(1 - cs[t] * cs[t]) * dh
+        dc = dsigmoid(cp.tanh(cs[t])) * os[t] * dh#os[t]*(1 - cs[t] * cs[t]) * dh
         dc = dc + dcnext
 
         #gradient for f in c_t = f * c_(t-1) + i * c_
